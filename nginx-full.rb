@@ -1,14 +1,13 @@
 class NginxFull < Formula
-  desc "HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server"
+  desc "HTTP(S) server, reverse proxy, IMAP/POP3 proxy server"
   homepage "http://nginx.org/"
   url "http://nginx.org/download/nginx-1.8.0.tar.gz"
   sha256 "23cca1239990c818d8f6da118320c4979aadf5386deda691b1b7c2c96b9df3d5"
   head "http://hg.nginx.org/nginx/", :using => :hg
-  revision 2
 
   devel do
-    url "http://nginx.org/download/nginx-1.9.5.tar.gz"
-    sha256 "48e2787a6b245277e37cb7c5a31b1549a0bbacf288aa4731baacf9eaacdb481b"
+    url "http://nginx.org/download/nginx-1.9.9.tar.gz"
+    sha256 "de66bb2b11c82533aa5cb5ccc27cbce736ab87c9f2c761e5237cda0b00068d73"
   end
 
   def self.core_modules
@@ -27,7 +26,8 @@ class NginxFull < Formula
       ["http2",            "http_v2_module",           "Compile with support for HTTP/2 module"],
       ["image-filter",     "http_image_filter_module", "Compile with support for Image Filter module"],
       ["mail",             "mail",                     "Compile with support for Mail module"],
-      ["mail-ssl",         "mail_ssl_module",          "Compile with support for Mail SSL module"],
+      ["mail-ssl",         "mail_ssl_module",          "Compile with support fo
+r Mail SSL module"],
       ["mp4",              "http_mp4_module",          "Compile with support for mp4 module"],
       ["pcre-jit",         "pcre-jit",                 "Compile with support for JIT in PCRE"],
       ["perl",             "http_perl_module",         "Compile with support for Perl module"],
@@ -57,7 +57,6 @@ class NginxFull < Formula
       "autols" => "Compile with support for Flexible Auto Index module",
       "cache-purge" => "Compile with support for Cache Purge module",
       "captcha" => "Compile with support for Captcha module",
-      "consistent-hash" => "Compile with support for Consistent Hash Upstream module",
       "counter-zone" => "Compile with support for Realtime Counter Zone module",
       "ctpp2" => "Compile with support for CT++ module",
       "dav-ext" => "Compile with support for HTTP WebDav Extended module",
@@ -66,6 +65,7 @@ class NginxFull < Formula
       "eval" => "Compile with support for Eval module",
       "extended-status" => "Compile with support for Extended Status module",
       "fancyindex" => "Compile with support for Fancy Index module",
+      "geoip2" => "Nginx GeoIP2 module",
       "headers-more" => "Compile with support for Headers More module",
       "healthcheck" => "Compile with support for Healthcheck module",
       "http-accounting" => "Compile with support for HTTP Accounting module",
@@ -76,6 +76,8 @@ class NginxFull < Formula
       "mod-zip" => "Compile with support for HTTP Zip module",
       "mogilefs" => "Compile with support for HTTP MogileFS module",
       "mp4-h264" => "Compile with support for HTTP MP4/H264 module",
+      "naxsi" => "Compile with support for Naxsi module",
+      "nchan" => "Compile with Nchan, a flexible pub/sub server",
       "notice" => "Compile with support for HTTP Notice module",
       "php-session" => "Compile with support for Parse PHP Sessions module",
       "push-stream" => "Compile with support for http push stream module",
@@ -91,21 +93,13 @@ class NginxFull < Formula
       "unzip" => "Compile with support for UnZip module",
       "upload" => "Compile with support for Upload module",
       "upload-progress" => "Compile with support for Upload Progress module",
-      "upstream-hash" => "Compile with support for Upstream Hash module",
       "upstream-order" => "Compile with support for Order Upstream module",
       "ustats" => "Compile with support for Upstream Statistics (HAProxy style) module",
       "var-req-speed" => "Compile with support for Var Request-Speed module",
+      "vod" => "Compile with support for Kaltura VOD on-the-fly packager",
       "websockify" => "Compile with support for websockify module",
       "xsltproc" => "Compile with support for XSLT transformations",
     }
-  end
-
-  if build.with?("http-flood-detector-module") && build.without?("status")
-    raise "http-flood-detector-nginx-module: Stub Status module is required --with-status"
-  end
-
-  if build.with?("dav-ext-module") && build.without?("webdav")
-    raise "dav-ext-nginx-module: WebDav Extended module is required --with-webdav"
   end
 
   depends_on "pcre"
@@ -121,14 +115,14 @@ class NginxFull < Formula
   depends_on "icu4c" if build.with? "xsltproc-module"
   depends_on "libxml2" if build.with? "xsltproc-module"
   depends_on "libxslt" if build.with? "xsltproc-module"
-  depends_on "google-perftools" => :optional
+  depends_on "gperftools" => :optional
   depends_on "gd" => :optional
   depends_on "imlib2" => :optional
 
-  self.core_modules.each do |arr|
+  core_modules.each do |arr|
     option "with-#{arr[0]}", arr[2]
   end
-  self.third_party_modules.each do |name, desc|
+  third_party_modules.each do |name, desc|
     option "with-#{name}-module", desc
     depends_on "#{name}-nginx-module" if build.with? "#{name}-module"
   end
@@ -155,6 +149,14 @@ class NginxFull < Formula
   skip_clean "logs"
 
   def install
+    if build.with?("http-flood-detector-module") && build.without?("status")
+      odie "http-flood-detector-nginx-module: Stub Status module is required --with-status"
+    end
+
+    if build.with?("dav-ext-module") && build.without?("webdav")
+      odie "dav-ext-nginx-module: WebDav Extended module is required --with-webdav"
+    end
+
     # small-light needs to run setup script
     if build.with? "small-light-module"
       small_light = Formula["small-light-nginx-module"]
@@ -213,11 +215,9 @@ class NginxFull < Formula
     ]
 
     # Core Modules
-    args += self.class.core_modules.select { |arr|
-      build.with? arr[0]
-    }.collect { |arr|
-      "--with-#{arr[1]}" if arr[1]
-    }.compact
+    self.class.core_modules.each do |arr|
+      args << "--with-#{arr[1]}" if build.with?(arr[0]) && arr[1]
+    end
 
     # Set misc module depends on nginx-devel-kit being compiled in
     if build.with? "set-misc-module"
@@ -225,11 +225,11 @@ class NginxFull < Formula
     end
 
     # Third Party Modules
-    args += self.class.third_party_modules.select { |name, _desc|
-      build.with? "#{name}-module"
-    }.collect { |name, _desc|
-      "--add-module=#{HOMEBREW_PREFIX}/share/#{name}-nginx-module"
-    }
+    self.class.third_party_modules.each_key do |name|
+      if build.with? "#{name}-module"
+        args << "--add-module=#{HOMEBREW_PREFIX}/share/#{name}-nginx-module"
+      end
+    end
 
     # Passenger
     if build.with? "passenger"
@@ -305,8 +305,8 @@ class NginxFull < Formula
 
     - Tips -
     Run port 80:
-     $ sudo chown root:wheel #{sbin}/nginx
-     $ sudo chmod u+s #{sbin}/nginx
+     $ sudo chown root:wheel #{bin}/nginx
+     $ sudo chmod u+s #{bin}/nginx
     Reload config:
      $ nginx -s reload
     Reopen Logfile:
