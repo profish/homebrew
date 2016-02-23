@@ -1,13 +1,13 @@
 class NginxFull < Formula
   desc "HTTP(S) server, reverse proxy, IMAP/POP3 proxy server"
   homepage "http://nginx.org/"
-  url "http://nginx.org/download/nginx-1.8.0.tar.gz"
-  sha256 "23cca1239990c818d8f6da118320c4979aadf5386deda691b1b7c2c96b9df3d5"
+  url "http://nginx.org/download/nginx-1.8.1.tar.gz"
+  sha256 "8f4b3c630966c044ec72715754334d1fdf741caa1d5795fb4646c27d09f797b7"
   head "http://hg.nginx.org/nginx/", :using => :hg
 
   devel do
-    url "http://nginx.org/download/nginx-1.9.9.tar.gz"
-    sha256 "de66bb2b11c82533aa5cb5ccc27cbce736ab87c9f2c761e5237cda0b00068d73"
+    url "http://nginx.org/download/nginx-1.9.11.tar.gz"
+    sha256 "6a5c72f4afaf57a6db064bba0965d72335f127481c5d4e64ee8714e7b368a51f"
   end
 
   def self.core_modules
@@ -23,18 +23,17 @@ class NginxFull < Formula
       ["google-perftools", "google_perftools_module",  "Compile with support for Google Performance tools module"],
       ["gunzip",           "http_gunzip_module",       "Compile with support for gunzip module"],
       ["gzip-static",      "http_gzip_static_module",  "Compile with support for Gzip static module"],
+      ["spdy",             "http_spdy_module",         "Compile with support for SPDY module"],
       ["http2",            "http_v2_module",           "Compile with support for HTTP/2 module"],
       ["image-filter",     "http_image_filter_module", "Compile with support for Image Filter module"],
       ["mail",             "mail",                     "Compile with support for Mail module"],
-      ["mail-ssl",         "mail_ssl_module",          "Compile with support fo
-r Mail SSL module"],
+      ["mail-ssl",         "mail_ssl_module",          "Compile with support for Mail SSL module"],
       ["mp4",              "http_mp4_module",          "Compile with support for mp4 module"],
       ["pcre-jit",         "pcre-jit",                 "Compile with support for JIT in PCRE"],
       ["perl",             "http_perl_module",         "Compile with support for Perl module"],
       ["random-index",     "http_random_index_module", "Compile with support for Random Index module"],
       ["realip",           "http_realip_module",       "Compile with support for real IP module"],
       ["secure-link",      "http_secure_link_module",  "Compile with support for secure link module"],
-      ["spdy",             "http_spdy_module",         "Compile with support for SPDY module"],
       ["status",           "http_stub_status_module",  "Compile with support for stub status module"],
       ["stream",           "stream",                   "Compile with support for TCP load balancing module"],
       ["sub",              "http_sub_module",          "Compile with support for HTTP Sub module"],
@@ -76,6 +75,7 @@ r Mail SSL module"],
       "mod-zip" => "Compile with support for HTTP Zip module",
       "mogilefs" => "Compile with support for HTTP MogileFS module",
       "mp4-h264" => "Compile with support for HTTP MP4/H264 module",
+      "mruby" => "Compile with support for MRuby module",
       "naxsi" => "Compile with support for Naxsi module",
       "nchan" => "Compile with Nchan, a flexible pub/sub server",
       "notice" => "Compile with support for HTTP Notice module",
@@ -118,6 +118,13 @@ r Mail SSL module"],
   depends_on "gperftools" => :optional
   depends_on "gd" => :optional
   depends_on "imlib2" => :optional
+
+  # HTTP2 (backward compatibility for spdy)
+  if build.devel?
+    deprecated_option "with-spdy" => "with-http2"
+  else
+    deprecated_option "with-http2" => "with-spdy"
+  end
 
   core_modules.each do |arr|
     option "with-#{arr[0]}", arr[2]
@@ -165,6 +172,26 @@ r Mail SSL module"],
       Dir.chdir("#{small_light.share}/#{small_light.name}")
       system "./setup", *args
       raise "The small-light setup script couldn't generate config file." unless File.exist?("./config")
+      Dir.chdir(origin_dir)
+    end
+
+    # mruby module needs to prepare compiling mruby
+    if build.with? "mruby-module"
+      mruby = Formula["mruby-nginx-module"]
+      origin_dir = Dir.pwd
+      Dir.chdir("#{mruby.share}/#{mruby.name}")
+      # The compile flow of ngx_mruby is assumed that build_config.rb is managed with git.
+      system "git", "init"
+      system "git", "submodule", "init"
+      system "git", "submodule", "update"
+      Dir.chdir("#{mruby.share}/#{mruby.name}/mruby")
+      system "git", "add", "build_config.rb"
+      system "git", "commit", "-m 'build_config.rb'"
+      Dir.chdir("#{mruby.share}/#{mruby.name}")
+      system "./configure", "--with-ngx-src-root=#{buildpath}"
+      system "make", "build_mruby"
+      system "make", "generate_gems_config"
+      rm_rf('.git')
       Dir.chdir(origin_dir)
     end
 
@@ -219,8 +246,8 @@ r Mail SSL module"],
       args << "--with-#{arr[1]}" if build.with?(arr[0]) && arr[1]
     end
 
-    # Set misc module depends on nginx-devel-kit being compiled in
-    if build.with? "set-misc-module"
+    # Set misc module and mruby module both depend on nginx-devel-kit being compiled in
+    if build.with?("set-misc-module") || build.with?("mruby-module")
       args << "--add-module=#{HOMEBREW_PREFIX}/share/ngx-devel-kit"
     end
 
