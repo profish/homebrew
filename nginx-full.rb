@@ -1,14 +1,11 @@
 class NginxFull < Formula
   desc "HTTP(S) server, reverse proxy, IMAP/POP3 proxy server"
   homepage "http://nginx.org/"
-  url "http://nginx.org/download/nginx-1.8.1.tar.gz"
-  sha256 "8f4b3c630966c044ec72715754334d1fdf741caa1d5795fb4646c27d09f797b7"
+  url "http://nginx.org/download/nginx-1.10.0.tar.gz"
+  sha256 "8ed647c3dd65bc4ced03b0e0f6bf9e633eff6b01bac772bcf97077d58bc2be4d"
   head "http://hg.nginx.org/nginx/", :using => :hg
 
-  devel do
-    url "http://nginx.org/download/nginx-1.9.12.tar.gz"
-    sha256 "1af2eb956910ed4b11aaf525a81bc37e135907e7127948f9179f5410337da042"
-  end
+  conflicts_with "nginx", :because => "nginx-full symlink with the name for compatibility with nginx"
 
   def self.core_modules
     [
@@ -23,7 +20,6 @@ class NginxFull < Formula
       ["google-perftools", "google_perftools_module",  "Compile with support for Google Performance tools module"],
       ["gunzip",           "http_gunzip_module",       "Compile with support for gunzip module"],
       ["gzip-static",      "http_gzip_static_module",  "Compile with support for Gzip static module"],
-      ["spdy",             "http_spdy_module",         "Compile with support for SPDY module"],
       ["http2",            "http_v2_module",           "Compile with support for HTTP/2 module"],
       ["image-filter",     "http_image_filter_module", "Compile with support for Image Filter module"],
       ["mail",             "mail",                     "Compile with support for Mail module"],
@@ -120,10 +116,8 @@ class NginxFull < Formula
   depends_on "imlib2" => :optional
 
   # HTTP2 (backward compatibility for spdy)
-  if build.devel?
+  if build.with?("spdy")
     deprecated_option "with-spdy" => "with-http2"
-  else
-    deprecated_option "with-http2" => "with-spdy"
   end
 
   core_modules.each do |arr|
@@ -191,13 +185,15 @@ class NginxFull < Formula
       system "./configure", "--with-ngx-src-root=#{buildpath}"
       system "make", "build_mruby"
       system "make", "generate_gems_config"
-      rm_rf('.git')
+      rm_rf(".git")
       Dir.chdir(origin_dir)
     end
 
     # Changes default port to 8080
-    inreplace "conf/nginx.conf", "listen       80;", "listen       8080;"
-    inreplace "conf/nginx.conf", "    #}\n\n}", "    #}\n    include servers/*;\n}"
+    inreplace "conf/nginx.conf" do |s|
+      s.gsub! "listen       80;", "listen       8080;"
+      s.gsub! "    #}\n\n}", "    #}\n    include servers/*;\n}"
+    end
 
     pcre = Formula["pcre"]
     openssl = Formula["openssl"]
@@ -293,7 +289,7 @@ class NginxFull < Formula
     # to #{HOMEBREW_PREFIX}/var/www. The reason we symlink instead of patching
     # is so the user can redirect it easily to something else if they choose.
     html = prefix/"html"
-    dst  = var/"www"
+    dst = var/"www"
 
     if dst.exist?
       html.rmtree
@@ -316,7 +312,7 @@ class NginxFull < Formula
 
   def passenger_caveats; <<-EOS.undent
     To activate Phusion Passenger, add this to #{etc}/nginx/nginx.conf, inside the 'http' context:
-      passenger_root #{Formula["passenger"].opt_libexec}/lib/phusion_passenger/locations.ini;
+      passenger_root #{Formula["passenger"].opt_libexec}/src/ruby_supportlib/phusion_passenger/locations.ini;
       passenger_ruby /usr/bin/ruby;
     EOS
   end
@@ -347,9 +343,7 @@ class NginxFull < Formula
     s
   end
 
-  test do
-    system "#{bin}/nginx", "-t"
-  end
+  plist_options :manual => "nginx"
 
   def plist; <<-EOS.undent
     <?xml version="1.0" encoding="UTF-8"?>
@@ -373,5 +367,33 @@ class NginxFull < Formula
       </dict>
     </plist>
     EOS
+  end
+
+  test do
+    (testpath/"nginx.conf").write <<-EOS
+      worker_processes 4;
+      error_log #{testpath}/error.log;
+      pid #{testpath}/nginx.pid;
+
+      events {
+        worker_connections 1024;
+      }
+
+      http {
+        client_body_temp_path #{testpath}/client_body_temp;
+        fastcgi_temp_path #{testpath}/fastcgi_temp;
+        proxy_temp_path #{testpath}/proxy_temp;
+        scgi_temp_path #{testpath}/scgi_temp;
+        uwsgi_temp_path #{testpath}/uwsgi_temp;
+
+        server {
+          listen 8080;
+          root #{testpath};
+          access_log #{testpath}/access.log;
+          error_log #{testpath}/error.log;
+        }
+      }
+    EOS
+    system "#{bin}/nginx", "-t", "-c", testpath/"nginx.conf"
   end
 end
