@@ -2,8 +2,8 @@ require 'formula'
 
 class Slib < Formula
   homepage 'http://people.csail.mit.edu/jaffer/SLIB'
-  url 'http://groups.csail.mit.edu/mac/ftpdir/scm/slib-3b5.zip'
-  sha256 'f8b64a9820c2ccbdb263a0cb7bcf4caadce0857fdf4e2f52111ca33b4a131760'
+  url 'http://groups.csail.mit.edu/mac/ftpdir/scm/slib-3b6.zip'
+  sha256 '2e8cb4843b5400b2e39fe9ddcc8040a412f9a19cccf5e7e2c2e071ceb9b0ed8c'
 
   def install
     system "./configure", "--prefix=#{prefix}"
